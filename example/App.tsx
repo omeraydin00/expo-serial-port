@@ -1,4 +1,5 @@
 import * as Serial from '@omeraydin00/expo-serial-port';
+import { reloadAppAsync } from 'expo';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -161,6 +162,8 @@ export default function App() {
         ) : (
           <Button title="Open" onPress={open} disabled={!selected} />
         )}
+        {/* Reloads the JS bundle with the port left open; the module should close it. */}
+        <Button title="Reload JS" onPress={() => reloadAppAsync('reload test')} />
       </View>
       <View style={styles.row}>
         <TextInput style={styles.input} value={text} onChangeText={setText} autoCapitalize="none" />
