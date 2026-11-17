@@ -14,14 +14,20 @@ describe('normalizeOptions', () => {
   });
 
   it('passes framing through', () => {
-    expect(normalizeOptions({ baudRate: 1, framing: { type: 'delimiter', bytes: [13, 10] } }).framing).toEqual({
+    expect(
+      normalizeOptions({ baudRate: 1, framing: { type: 'delimiter', bytes: [13, 10] } }).framing
+    ).toEqual({
       type: 'delimiter',
       bytes: [13, 10],
       size: 0,
       ms: 0,
     });
-    expect(normalizeOptions({ baudRate: 1, framing: { type: 'idle', ms: 20 } }).framing.ms).toBe(20);
-    expect(normalizeOptions({ baudRate: 1, framing: { type: 'length', size: 12 } }).framing.size).toBe(12);
+    expect(normalizeOptions({ baudRate: 1, framing: { type: 'idle', ms: 20 } }).framing.ms).toBe(
+      20
+    );
+    expect(
+      normalizeOptions({ baudRate: 1, framing: { type: 'length', size: 12 } }).framing.size
+    ).toBe(12);
   });
 
   it.each([

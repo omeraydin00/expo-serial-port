@@ -16,5 +16,8 @@ export function toSerialError(e: unknown): SerialError {
   const err = e as { code?: string; message?: string };
   const message = err?.message ?? String(e);
   const cause = message.split('Caused by: ');
-  return new SerialError((err?.code ?? 'OPEN_FAILED') as SerialErrorCode, cause[cause.length - 1].trim());
+  return new SerialError(
+    (err?.code ?? 'OPEN_FAILED') as SerialErrorCode,
+    cause[cause.length - 1].trim()
+  );
 }

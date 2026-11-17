@@ -1,3 +1,5 @@
+import * as Serial from '../index';
+
 type Listener = (e: any) => void;
 
 const listeners: Record<string, Set<Listener>> = { onData: new Set(), onError: new Set() };
@@ -13,8 +15,11 @@ const mockNative = {
   list: jest.fn(async () => [{ kind: 'uart', path: '/dev/ttyS1', readable: true, writable: true }]),
   requestUsbPermission: jest.fn(async () => true),
   openUart: jest.fn(async (path: string) => {
-    if (path === '/dev/locked') throw Object.assign(
-        new Error("Call to function 'ExpoSerialPort.openUart' has been rejected.\n→ Caused by: No read/write access to /dev/locked"),
+    if (path === '/dev/locked')
+      throw Object.assign(
+        new Error(
+          "Call to function 'ExpoSerialPort.openUart' has been rejected.\n→ Caused by: No read/write access to /dev/locked"
+        ),
         { code: 'PERMISSION_DENIED' }
       );
     calls.push('openUart');
@@ -35,8 +40,6 @@ jest.mock('../ExpoSerialPortModule', () => ({
     return mockNative;
   },
 }));
-
-import * as Serial from '../index';
 
 beforeEach(() => {
   calls.length = 0;
@@ -67,12 +70,18 @@ it('opens a UART by path and starts reading after the port exists', async () => 
 
 it('opens USB with device and port number', async () => {
   const port = await Serial.open(usb, { baudRate: 9600 });
-  expect(mockNative.openUsb).toHaveBeenCalledWith(1003, 0, expect.objectContaining({ baudRate: 9600 }));
+  expect(mockNative.openUsb).toHaveBeenCalledWith(
+    1003,
+    0,
+    expect.objectContaining({ baudRate: 9600 })
+  );
   await port.close();
 });
 
 it('refuses useSu on USB', async () => {
-  await expect(Serial.open(usb, { baudRate: 9600, useSu: true })).rejects.toMatchObject({ code: 'INVALID_OPTIONS' });
+  await expect(Serial.open(usb, { baudRate: 9600, useSu: true })).rejects.toMatchObject({
+    code: 'INVALID_OPTIONS',
+  });
 });
 
 it('keeps the native error code', async () => {

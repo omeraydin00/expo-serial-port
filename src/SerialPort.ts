@@ -1,5 +1,5 @@
-import Native from './ExpoSerialPortModule';
 import { PortInfo, Subscription } from './ExpoSerialPort.types';
+import Native from './ExpoSerialPortModule';
 import { SerialError, toSerialError } from './SerialError';
 import { utf8 } from './utf8';
 
@@ -50,9 +50,11 @@ export class SerialPort {
 
   /** Writes bytes, or a string as UTF-8. Resolves once the data has been handed to the driver. */
   async write(data: Uint8Array | string): Promise<void> {
-    if (!this.open || !Native) throw new SerialError('NOT_OPEN', `${describe(this.info)} is closed`);
+    if (!this.open || !Native)
+      throw new SerialError('NOT_OPEN', `${describe(this.info)} is closed`);
     const bytes = typeof data === 'string' ? utf8(data) : data;
-    if (!(bytes instanceof Uint8Array)) throw new SerialError('INVALID_OPTIONS', 'write() takes a Uint8Array or a string');
+    if (!(bytes instanceof Uint8Array))
+      throw new SerialError('INVALID_OPTIONS', 'write() takes a Uint8Array or a string');
     try {
       await Native.write(this.handle, bytes);
     } catch (e) {

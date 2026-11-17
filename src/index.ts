@@ -1,8 +1,8 @@
-import Native from './ExpoSerialPortModule';
 import { OpenOptions, PortInfo, UartPortInfo } from './ExpoSerialPort.types';
-import { normalizeOptions } from './options';
+import Native from './ExpoSerialPortModule';
 import { SerialError, toSerialError } from './SerialError';
 import { SerialPort } from './SerialPort';
+import { normalizeOptions } from './options';
 
 export * from './ExpoSerialPort.types';
 export { SerialError } from './SerialError';
@@ -32,7 +32,9 @@ export async function requestUsbPermission(deviceId: number): Promise<boolean> {
 export async function open(port: PortInfo | string, options: OpenOptions): Promise<SerialPort> {
   if (!Native) unsupported();
   const info: PortInfo =
-    typeof port === 'string' ? ({ kind: 'uart', path: port, readable: true, writable: true } as UartPortInfo) : port;
+    typeof port === 'string'
+      ? ({ kind: 'uart', path: port, readable: true, writable: true } as UartPortInfo)
+      : port;
   const native = normalizeOptions(options);
   if (info.kind === 'usb' && native.useSu) {
     throw new SerialError('INVALID_OPTIONS', 'useSu only applies to UART ports');
