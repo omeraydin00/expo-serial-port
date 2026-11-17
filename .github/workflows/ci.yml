@@ -38,4 +38,4 @@ jobs:
         working-directory: example
       - name: Unit tests and example build
         working-directory: example/android
-        run: ./gradlew :expo-serial-port:testDebugUnitTest :app:assembleDebug -PreactNativeArchitectures=x86_64
+        run: ./gradlew :omeraydin00-expo-serial-port:testDebugUnitTest :app:assembleDebug -PreactNativeArchitectures=x86_64

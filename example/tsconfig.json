@@ -3,7 +3,7 @@
   "compilerOptions": {
     "strict": true,
     "paths": {
-      "expo-serial-port": ["../src"]
+      "@omeraydin00/expo-serial-port": ["../src"]
     }
   }
 }

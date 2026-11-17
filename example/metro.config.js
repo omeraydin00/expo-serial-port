@@ -10,6 +10,6 @@ const config = getDefaultConfig(__dirname);
 config.watchFolders = [path.resolve(__dirname, '..')];
 
 // The example imports the module by its package name.
-config.resolver.extraNodeModules = { 'expo-serial-port': path.resolve(__dirname, '..') };
+config.resolver.extraNodeModules = { '@omeraydin00/expo-serial-port': path.resolve(__dirname, '..') };
 
 module.exports = config;

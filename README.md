@@ -15,7 +15,7 @@ Android only. On iOS and web `list()` returns `[]` and `open()` rejects with `UN
 ## Install
 
 ```sh
-npx expo install expo-serial-port
+npx expo install @omeraydin00/expo-serial-port
 ```
 
 Then rebuild the app (`npx expo run:android` or an EAS build). It does not run in Expo Go.
@@ -25,7 +25,7 @@ The USB drivers come from [usb-serial-for-android](https://github.com/mik3y/usb-
 ## Usage
 
 ```ts
-import * as Serial from 'expo-serial-port';
+import * as Serial from '@omeraydin00/expo-serial-port';
 
 const ports = await Serial.list();
 // [{ kind: 'uart', path: '/dev/ttyS3', readable: true, writable: true },

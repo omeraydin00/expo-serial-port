@@ -1,4 +1,4 @@
-import * as Serial from 'expo-serial-port';
+import * as Serial from '@omeraydin00/expo-serial-port';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
 import {

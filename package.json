@@ -1,5 +1,5 @@
 {
-  "name": "expo-serial-port",
+  "name": "@omeraydin00/expo-serial-port",
   "version": "0.1.0",
   "description": "Serial ports on Android for Expo and React Native: UART (/dev/ttyS*) and USB-serial adapters",
   "main": "build/index.js",

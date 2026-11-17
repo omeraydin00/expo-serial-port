@@ -24,7 +24,7 @@ Out:
 ## JS API
 
 ```ts
-import * as Serial from 'expo-serial-port';
+import * as Serial from '@omeraydin00/expo-serial-port';
 
 type PortInfo =
   | { kind: 'uart'; path: string; readable: boolean; writable: boolean }
@@ -138,5 +138,5 @@ On hardware, before each release:
 ## Release
 
 - GitHub `omeraydin00/expo-serial-port`, MIT
-- npm `expo-serial-port`, starting at 0.1.0
+- npm `@omeraydin00/expo-serial-port` (the unscoped name was refused as too close to `expo-serialport`), starting at 0.1.0
 - README: install, a short example, API reference, permission troubleshooting, tested devices
