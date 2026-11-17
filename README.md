@@ -1,5 +1,10 @@
 # expo-serial-port
 
+[![npm](https://img.shields.io/npm/v/@omeraydin00/expo-serial-port)](https://www.npmjs.com/package/@omeraydin00/expo-serial-port)
+[![CI](https://github.com/omeraydin00/expo-serial-port/actions/workflows/ci.yml/badge.svg)](https://github.com/omeraydin00/expo-serial-port/actions/workflows/ci.yml)
+![platform](https://img.shields.io/badge/platform-Android-3DDC84)
+[![license](https://img.shields.io/npm/l/@omeraydin00/expo-serial-port)](LICENSE)
+
 Serial ports on Android for Expo and React Native: the board's own UARTs (`/dev/ttyS*` and friends) and USB-serial adapters (CH340, FTDI, CP210x, PL2303, CDC-ACM), behind one API.
 
 Made for the Android boards inside vending machines, kiosks and industrial screens, which talk to their controllers over a serial line.

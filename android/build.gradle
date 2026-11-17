@@ -4,7 +4,7 @@ plugins {
 }
 
 group = 'expo.modules.serialport'
-version = '0.1.0'
+version = '0.1.1'
 
 repositories {
   maven { url 'https://jitpack.io' }
@@ -13,8 +13,8 @@ repositories {
 android {
   namespace "expo.modules.serialport"
   defaultConfig {
-    versionCode 1
-    versionName "0.1.0"
+    versionCode 2
+    versionName "0.1.1"
     minSdkVersion 24
   }
   externalNativeBuild {
