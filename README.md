@@ -119,11 +119,12 @@ Phones normally have no usable UART; use a USB adapter there.
 
 ## Tested on
 
-| Device                | Android | What                                                                                           |
-| --------------------- | ------- | ---------------------------------------------------------------------------------------------- |
-| Samsung Galaxy S25 FE | 17      | `list()` finds `/dev/ttySAC0` and `ttySAC1`, `open()` on them rejects with `PERMISSION_DENIED` |
+| Device                | Android | Port                                  | What                                                                                                                                               |
+| --------------------- | ------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Samsung Galaxy S25 FE | 17      | CP2102 over USB-C OTG, TX wired to RX | permission dialog; 256-byte loopback at 115200 (56 ms) and 9600 (319 ms); raw, delimiter, idle and length framing; unplugging gives `DISCONNECTED` |
+| Samsung Galaxy S25 FE | 17      | `/dev/ttySAC0`, `ttySAC1`             | listed; `open()` rejects with `PERMISSION_DENIED` (phone UARTs are not for apps)                                                                   |
 
-UART loopback on a rooted RK3566 board and USB loopback on CH340 / FTDI adapters are next.
+Not tested yet: UART loopback on a rooted board (with and without `useSu`), CH340 and FTDI adapters, ports being closed on a JS reload.
 
 ## Example app
 

@@ -62,16 +62,20 @@ export default function App() {
 
   const open = () =>
     run('open', async () => {
-      if (!selected) return;
-      if (selected.kind === 'usb' && !selected.hasPermission) {
-        const granted = await Serial.requestUsbPermission(selected.deviceId);
+      let target = selected;
+      if (!target) return;
+      if (target.kind === 'usb' && !target.hasPermission) {
+        const granted = await Serial.requestUsbPermission(target.deviceId);
         add(`USB permission ${granted ? 'granted' : 'denied'}`);
         if (!granted) return;
+        target = { ...target, hasPermission: true };
+        setSelected(target);
+        setPorts((list) => list.map((p) => (p === selected ? target! : p)));
       }
-      const p = await Serial.open(selected, {
+      const p = await Serial.open(target, {
         baudRate,
         framing: FRAMINGS[framing].value,
-        useSu: selected.kind === 'uart' ? useSu : false,
+        useSu: target.kind === 'uart' ? useSu : false,
       });
       p.onData((bytes) => {
         received.current.push(...bytes);
@@ -82,7 +86,7 @@ export default function App() {
         setPort(null);
       });
       setPort(p);
-      add(`opened ${label(selected)} at ${baudRate}, ${FRAMINGS[framing].label}`);
+      add(`opened ${label(target)} at ${baudRate}, ${FRAMINGS[framing].label}`);
     });
 
   const close = () =>
