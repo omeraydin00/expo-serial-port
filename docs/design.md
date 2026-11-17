@@ -28,8 +28,9 @@ import * as Serial from 'expo-serial-port';
 
 type PortInfo =
   | { kind: 'uart'; path: string; readable: boolean; writable: boolean }
-  | { kind: 'usb'; deviceId: number; vendorId: number; productId: number;
+  | { kind: 'usb'; deviceId: number; port: number; vendorId: number; productId: number;
       driver: string; name: string | null; hasPermission: boolean };
+// `port` is the port number on multi-port adapters (FTDI FT4232 etc.), otherwise 0
 
 type Framing =
   | { type: 'raw' }                              // default
@@ -53,6 +54,7 @@ Serial.open(port: PortInfo | string, options: OpenOptions): Promise<SerialPort>;
 
 interface SerialPort {
   readonly info: PortInfo;
+  readonly isOpen: boolean;
   write(data: Uint8Array | string): Promise<void>;
   onData(listener: (bytes: Uint8Array) => void): { remove(): void };
   onError(listener: (error: SerialError) => void): { remove(): void };
@@ -70,6 +72,9 @@ Errors are `SerialError` with a `code` and a message that names the port and, wh
 | `UNSUPPORTED_BAUD_RATE` | the UART driver or USB chip rejects the rate |
 | `INVALID_OPTIONS` | bad baud rate, data bits, framing etc., checked in JS before the native call |
 | `ALREADY_OPEN` | the port is already open in this app |
+| `NOT_OPEN` | write on a closed port |
+| `OPEN_FAILED` | any other open failure (message has the errno or driver error) |
+| `WRITE_FAILED` | the driver rejected a write |
 | `DISCONNECTED` | the USB device was unplugged or a read failed; the port is closed |
 | `UNSUPPORTED_PLATFORM` | iOS / web |
 
@@ -94,8 +99,10 @@ Each unit is small and has one job. `Framer` has no Android dependency, so it is
 
 ### Data flow
 
-1. `open()` checks the options in JS, then the module opens the port, configures it and returns a numeric handle. The JS `SerialPort` object keeps the handle.
-2. `ReadLoop` reads with a short timeout (50 ms), passes the bytes to the port's `Framer` and calls the module's `onData` event with `{ handle, bytes }` for every frame. On the idle framer, the timeout also drives the "line went quiet" check.
+1. `open()` checks the options in JS, then the module opens the port, configures it and returns a numeric handle. JS creates the `SerialPort` for that handle and only then calls `startReading(handle)`, so no packet arrives before there is a port to route it to.
+2. `ReadLoop` reads, passes the bytes to the port's `Framer` and calls the module's `onData` event with `{ handle, bytes }` for every frame.
+   - UART: `poll()` with a short timeout (50 ms, or half the idle gap); the timeout also drives the idle check.
+   - USB: blocking reads (timeout 0). usb-serial-for-android notes that bulk transfers with timeouts up to 200 ms lose data, so the idle check runs on a separate ticker instead. Closing the port unblocks the read.
 3. The JS side routes events to the right `SerialPort` by handle.
 4. `write()` runs on a per-port single-thread executor, so writes from the same port never interleave.
 
