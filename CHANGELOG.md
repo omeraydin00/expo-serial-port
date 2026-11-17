@@ -2,7 +2,7 @@
 
 ## 0.1.1 (2026-11-17)
 
-- README: badges, and the npm page now shows the same README as GitHub.
+- README badges (npm version, CI, platform, license).
 
 ## 0.1.0 (2026-11-17)
 
