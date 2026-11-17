@@ -70,7 +70,7 @@ class ExpoSerialPortModule : Module() {
       val node = File(path)
       if (options.useSu && node.exists() && !(node.canRead() && node.canWrite())) {
         if (!SuHelper.makeAccessible(path)) {
-          throw SerialException("PERMISSION_DENIED", "No read/write access to $path, and chmod through su did not help")
+          throw SerialException("PERMISSION_DENIED", "No read/write access to $path, and chmod through su did not help (no su, or su does not allow this app)")
         }
       }
       register(UartPort(path, options), options)
