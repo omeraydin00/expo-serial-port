@@ -130,9 +130,10 @@ Phones normally have no usable UART; use a USB adapter there.
 | DWIN DMG10600C101 (RK3566, userdebug) | 11      | `/dev/ttyS5` set to `0600`                           | `PERMISSION_DENIED` without `useSu`, opens with it (this ROM's `su` takes `su 0 cmd`, not `su -c`)                           |
 | DWIN DMG10600C101 (RK3566, userdebug) | 11      | CP2102 in the board's USB-A port, TX wired to RX     | 256-byte loopback at 115200 (223 ms) and 9600 (424 ms), raw and idle framing                                                 |
 | Samsung Galaxy S25 FE                 | 17      | CP2102 over USB-C OTG, TX wired to RX                | permission dialog; 256-byte loopback at 115200 (56 ms) and 9600 (319 ms); all four framings; unplugging gives `DISCONNECTED` |
+| Samsung Galaxy S25 FE                 | 17      | CP2102, port left open across `reloadAppAsync()`     | after the reload the port opens again, one reader thread, loopback 256/256                                                   |
 | Samsung Galaxy S25 FE                 | 17      | `/dev/ttySAC0`, `ttySAC1`                            | listed; `open()` rejects with `PERMISSION_DENIED` (phone UARTs are not for apps)                                             |
 
-Times are from `write()` to the last byte arriving in JS. Not tested yet: CH340 and FTDI adapters, ports being closed on a JS reload.
+Times are from `write()` to the last byte arriving in JS. Not tested yet: CH340 and FTDI adapters.
 
 ## Example app
 
