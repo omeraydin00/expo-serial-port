@@ -9,8 +9,62 @@ describe('normalizeOptions', () => {
       stopBits: 1,
       parity: 'none',
       useSu: false,
+      flowControl: 'none',
+      rs485: {
+        enabled: false,
+        rtsOnSend: true,
+        rtsAfterSend: false,
+        delayBeforeSendMs: 0,
+        delayAfterSendMs: 0,
+        receiveDuringSend: false,
+      },
       framing: { type: 'raw', bytes: [], size: 0, ms: 0 },
     });
+  });
+
+  it('checks flow control', () => {
+    expect(normalizeOptions({ baudRate: 1, flowControl: 'rts-cts' }).flowControl).toBe('rts-cts');
+    expect(() => normalizeOptions({ baudRate: 1, flowControl: 'hardware' as any })).toThrow(
+      expect.objectContaining({ code: 'INVALID_OPTIONS' })
+    );
+  });
+
+  it('turns rs485: true into the defaults', () => {
+    expect(normalizeOptions({ baudRate: 1, rs485: true }).rs485).toEqual({
+      enabled: true,
+      rtsOnSend: true,
+      rtsAfterSend: false,
+      delayBeforeSendMs: 0,
+      delayAfterSendMs: 0,
+      receiveDuringSend: false,
+    });
+  });
+
+  it('merges rs485 options over the defaults, ignoring undefined', () => {
+    expect(
+      normalizeOptions({
+        baudRate: 1,
+        rs485: { rtsOnSend: false, rtsAfterSend: true, delayAfterSendMs: 2, receiveDuringSend: undefined },
+      }).rs485
+    ).toEqual({
+      enabled: true,
+      rtsOnSend: false,
+      rtsAfterSend: true,
+      delayBeforeSendMs: 0,
+      delayAfterSendMs: 2,
+      receiveDuringSend: false,
+    });
+  });
+
+  it.each([
+    [{ rtsOnSend: 1 }],
+    [{ delayBeforeSendMs: -1 }],
+    [{ delayAfterSendMs: 1.5 }],
+    [{ delayAfterSendMs: 5000 }],
+  ])('rejects bad rs485 options %j', (rs485) => {
+    expect(() => normalizeOptions({ baudRate: 1, rs485: rs485 as any })).toThrow(
+      expect.objectContaining({ code: 'INVALID_OPTIONS' })
+    );
   });
 
   it('passes framing through', () => {

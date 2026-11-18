@@ -21,6 +21,7 @@ const FRAMINGS: { label: string; value: Serial.Framing }[] = [
   { label: 'idle 20 ms', value: { type: 'idle', ms: 20 } },
   { label: '8 bytes', value: { type: 'length', size: 8 } },
 ];
+const FLOWS: Serial.FlowControl[] = ['none', 'rts-cts', 'xon-xoff'];
 
 const hex = (bytes: Uint8Array) =>
   Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join(' ');
@@ -29,13 +30,29 @@ const label = (p: Serial.PortInfo) =>
     ? `${p.path}${p.readable && p.writable ? '' : ' (no access)'}`
     : `USB ${p.driver} ${p.vendorId.toString(16)}:${p.productId.toString(16)}${p.port ? ` #${p.port}` : ''}${p.hasPermission ? '' : ' (no permission)'}`;
 
+const virtualInfo = (d: Serial.VirtualPort): Serial.PortInfo => ({
+  kind: 'uart',
+  path: d.path,
+  readable: true,
+  writable: true,
+});
+const fmtLines = (l: Serial.LineState) =>
+  Object.entries(l)
+    .map(([k, v]) => `${k}=${v ? 1 : 0}`)
+    .join(' ');
+
 export default function App() {
   const [ports, setPorts] = useState<Serial.PortInfo[]>([]);
   const [selected, setSelected] = useState<Serial.PortInfo | null>(null);
   const [baudRate, setBaudRate] = useState(115200);
   const [framing, setFraming] = useState(0);
   const [useSu, setUseSu] = useState(false);
+  const [flow, setFlow] = useState<Serial.FlowControl>('none');
+  const [rs485, setRs485] = useState(false);
   const [port, setPort] = useState<Serial.SerialPort | null>(null);
+  const [device, setDevice] = useState<Serial.VirtualPort | null>(null);
+  const [lines, setLines] = useState<Serial.LineState>({});
+  const linesWatch = useRef<Serial.Subscription | null>(null);
   const [text, setText] = useState('PING');
   const [log, setLog] = useState<string[]>([]);
   const received = useRef<number[]>([]);
@@ -45,7 +62,7 @@ export default function App() {
 
   const refresh = async () => {
     const list = await Serial.list();
-    setPorts(list);
+    setPorts(device ? [virtualInfo(device), ...list] : list);
     add(`found ${list.length} port(s)`);
   };
 
@@ -77,6 +94,8 @@ export default function App() {
         baudRate,
         framing: FRAMINGS[framing].value,
         useSu: target.kind === 'uart' ? useSu : false,
+        flowControl: flow,
+        rs485: target.kind === 'uart' && rs485,
       });
       p.onData((bytes) => {
         received.current.push(...bytes);
@@ -84,17 +103,75 @@ export default function App() {
       });
       p.onError((e) => {
         add(`error ${e.code}: ${e.message}`);
+        stopWatching();
         setPort(null);
       });
       setPort(p);
-      add(`opened ${label(target)} at ${baudRate}, ${FRAMINGS[framing].label}`);
+      add(
+        `opened ${label(target)} at ${baudRate}, ${FRAMINGS[framing].label}, flow ${flow}${rs485 ? ', RS-485' : ''}`
+      );
+      const c = p.capabilities;
+      add(
+        `lines [${c.lines.join(' ')}], flow [${c.flowControl.join(' ')}], break ${c.breakSignal}, rs485 ${c.rs485}`
+      );
     });
 
   const close = () =>
     run('close', async () => {
+      stopWatching();
       await port?.close();
       setPort(null);
       add('closed');
+    });
+
+  // A virtual device that echoes what the app writes, so Loopback works without a wire.
+  const createDevice = () =>
+    run('virtual', async () => {
+      const d = await Serial.createVirtualPort();
+      d.onData((bytes) => d.write(bytes));
+      setDevice(d);
+      setPorts((list) => [virtualInfo(d), ...list]);
+      add(`virtual echo device on ${d.path}`);
+    });
+
+  const hangUp = () =>
+    run('hang up', async () => {
+      await device?.close();
+      setPorts((list) => list.filter((p) => p.kind !== 'uart' || p.path !== device?.path));
+      setDevice(null);
+      add('virtual device hung up');
+    });
+
+  const stopWatching = () => {
+    linesWatch.current?.remove();
+    linesWatch.current = null;
+    setLines({});
+  };
+
+  const toggleWatch = () =>
+    run('watch lines', async () => {
+      if (!port) return;
+      if (linesWatch.current) return stopWatching();
+      linesWatch.current = port.onLinesChange((l) => {
+        setLines(l);
+        add(`lines ${fmtLines(l)}`);
+      });
+    });
+
+  const setLine = (name: 'dtr' | 'rts', value: boolean) =>
+    run(`set ${name}`, async () => {
+      await port?.setLines({ [name]: value });
+      add(`${name} ${value ? 'on' : 'off'}, read back ${fmtLines((await port?.getLines()) ?? {})}`);
+    });
+
+  const sendBreak = () =>
+    run('break', async () => {
+      received.current = [];
+      await port?.sendBreak(250);
+      await new Promise((r) => setTimeout(r, 300));
+      add(
+        `break 250 ms sent, ${received.current.length} byte(s) back: ${hex(Uint8Array.from(received.current))}`
+      );
     });
 
   const send = () =>
@@ -155,6 +232,13 @@ export default function App() {
         ))}
       </View>
       <View style={styles.row}>
+        {FLOWS.map((f) => (
+          <Chip key={f} title={f} active={f === flow} onPress={() => setFlow(f)} />
+        ))}
+        <Text>RS-485</Text>
+        <Switch value={rs485} onValueChange={setRs485} />
+      </View>
+      <View style={styles.row}>
         <Text>useSu (UART)</Text>
         <Switch value={useSu} onValueChange={setUseSu} />
         {port ? (
@@ -169,6 +253,31 @@ export default function App() {
         <TextInput style={styles.input} value={text} onChangeText={setText} autoCapitalize="none" />
         <Button title="Send" onPress={send} disabled={!port} />
         <Button title="Loopback" onPress={loopback} disabled={!port} />
+      </View>
+      <View style={styles.row}>
+        <Button
+          title={lines.dtr ? 'DTR off' : 'DTR on'}
+          onPress={() => setLine('dtr', !lines.dtr)}
+          disabled={!port}
+        />
+        <Button
+          title={lines.rts ? 'RTS off' : 'RTS on'}
+          onPress={() => setLine('rts', !lines.rts)}
+          disabled={!port}
+        />
+        <Button
+          title={linesWatch.current ? 'Unwatch' : 'Watch lines'}
+          onPress={toggleWatch}
+          disabled={!port}
+        />
+        <Button title="Break" onPress={sendBreak} disabled={!port} />
+      </View>
+      <View style={styles.row}>
+        {device ? (
+          <Button title="Hang up virtual" onPress={hangUp} />
+        ) : (
+          <Button title="Virtual device" onPress={createDevice} />
+        )}
       </View>
 
       <FlatList

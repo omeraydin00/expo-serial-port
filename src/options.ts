@@ -1,5 +1,5 @@
-import { OpenOptions } from './ExpoSerialPort.types';
-import { NativeOptions } from './ExpoSerialPortModule';
+import { Framing, OpenOptions } from './ExpoSerialPort.types';
+import { NativeFraming, NativeOptions, NativeRs485 } from './ExpoSerialPortModule';
 import { SerialError } from './SerialError';
 
 function invalid(message: string): never {
@@ -18,6 +18,8 @@ export function normalizeOptions(options: OpenOptions): NativeOptions {
     parity = 'none',
     framing = { type: 'raw' },
     useSu = false,
+    flowControl = 'none',
+    rs485 = false,
   } = options;
 
   if (!Number.isInteger(baudRate) || baudRate <= 0)
@@ -27,7 +29,49 @@ export function normalizeOptions(options: OpenOptions): NativeOptions {
   if (!['none', 'odd', 'even'].includes(parity))
     invalid(`parity must be 'none', 'odd' or 'even', got ${parity}`);
   if (typeof useSu !== 'boolean') invalid('useSu must be a boolean');
+  if (!['none', 'rts-cts', 'dtr-dsr', 'xon-xoff'].includes(flowControl))
+    invalid(`flowControl must be 'none', 'rts-cts', 'dtr-dsr' or 'xon-xoff', got ${flowControl}`);
 
+  return {
+    baudRate,
+    dataBits,
+    stopBits,
+    parity,
+    useSu,
+    flowControl,
+    rs485: normalizeRs485(rs485),
+    framing: normalizeFraming(framing),
+  };
+}
+
+function normalizeRs485(rs485: OpenOptions['rs485']): NativeRs485 {
+  const off = {
+    enabled: false,
+    rtsOnSend: true,
+    rtsAfterSend: false,
+    delayBeforeSendMs: 0,
+    delayAfterSendMs: 0,
+    receiveDuringSend: false,
+  };
+  if (rs485 === false) return off;
+  if (rs485 === true) return { ...off, enabled: true };
+  if (!rs485 || typeof rs485 !== 'object') invalid('rs485 must be a boolean or an object');
+  const out = { ...off, enabled: true };
+  for (const key of Object.keys(off) as (keyof NativeRs485)[]) {
+    if (key !== 'enabled' && rs485[key] !== undefined) (out as any)[key] = rs485[key];
+  }
+  for (const key of ['rtsOnSend', 'rtsAfterSend', 'receiveDuringSend'] as const) {
+    if (typeof out[key] !== 'boolean') invalid(`rs485.${key} must be a boolean`);
+  }
+  for (const key of ['delayBeforeSendMs', 'delayAfterSendMs'] as const) {
+    if (!Number.isInteger(out[key]) || out[key] < 0 || out[key] > 1000)
+      invalid(`rs485.${key} must be an integer from 0 to 1000`);
+  }
+  return out;
+}
+
+/** Checks a framing and fills in the unused fields. */
+export function normalizeFraming(framing: Framing): NativeFraming {
   const native = { type: framing?.type, bytes: [] as number[], size: 0, ms: 0 };
   switch (framing?.type) {
     case 'raw':
@@ -55,6 +99,5 @@ export function normalizeOptions(options: OpenOptions): NativeOptions {
     default:
       invalid(`framing.type must be 'raw', 'delimiter', 'length' or 'idle'`);
   }
-
-  return { baudRate, dataBits, stopBits, parity, useSu, framing: native };
+  return native;
 }

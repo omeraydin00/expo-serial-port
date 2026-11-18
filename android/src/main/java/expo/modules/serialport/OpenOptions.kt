@@ -12,6 +12,19 @@ internal class OpenOptions : Record {
   @Field var parity: String = "none"
   @Field var framing: FramingOptions = FramingOptions()
   @Field var useSu: Boolean = false
+  @Field var flowControl: String = "none"
+  @Field var rs485: Rs485Options = Rs485Options()
+
+  val rtsOwnedByDriver: Boolean
+    get() = flowControl == "rts-cts" || rs485.enabled
+
+  /** 0 none, 1 RTS/CTS, 2 XON/XOFF, as termios.c takes it. */
+  val uartFlowCode: Int
+    get() = when (flowControl) {
+      "rts-cts" -> 1
+      "xon-xoff" -> 2
+      else -> 0
+    }
 
   /** 0 none, 1 odd, 2 even: the same numbers in termios.c and usb-serial-for-android. */
   val parityCode: Int
@@ -37,4 +50,16 @@ internal class FramingOptions : Record {
     "idle" -> Framer.Idle(ms.toLong())
     else -> Framer.Raw()
   }
+}
+
+internal class Rs485Options : Record {
+  @Field var enabled: Boolean = false
+  @Field var rtsOnSend: Boolean = true
+  @Field var rtsAfterSend: Boolean = false
+  @Field var delayBeforeSendMs: Int = 0
+  @Field var delayAfterSendMs: Int = 0
+  @Field var receiveDuringSend: Boolean = false
+
+  val flags: Int
+    get() = Rs485.flags(rtsOnSend, rtsAfterSend, receiveDuringSend)
 }

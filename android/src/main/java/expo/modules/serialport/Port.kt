@@ -11,10 +11,21 @@ internal interface Port {
    */
   val blockingRead: Boolean
 
+  val capabilities: Capabilities
+
   /** Waits up to [timeoutMs] (0 = until data) for data. Returns the number of bytes read, 0 on timeout. Throws on a dead port. */
   fun read(buffer: ByteArray, timeoutMs: Int): Int
 
   fun write(data: ByteArray)
+
+  /** [Lines] bits. Only called when [capabilities] has lines. */
+  fun getLines(): Int
+
+  /** Raises the lines in [set] and drops the ones in [clear] (DTR and RTS only). */
+  fun setLines(set: Int, clear: Int)
+
+  /** Only called when [capabilities] has breakSignal. */
+  fun setBreak(on: Boolean)
 
   fun close()
 }

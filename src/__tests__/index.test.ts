@@ -2,10 +2,27 @@ import * as Serial from '../index';
 
 type Listener = (e: any) => void;
 
-const listeners: Record<string, Set<Listener>> = { onData: new Set(), onError: new Set() };
+const listeners: Record<string, Set<Listener>> = {
+  onData: new Set(),
+  onError: new Set(),
+  onLines: new Set(),
+};
 const emit = (name: string, event: any) => listeners[name].forEach((l) => l(event));
 let nextHandle = 1;
 const calls: string[] = [];
+
+const uartCaps: Serial.Capabilities = {
+  lines: ['dtr', 'rts', 'cts', 'dsr', 'cd', 'ri'],
+  flowControl: ['none', 'rts-cts', 'xon-xoff'],
+  breakSignal: true,
+  rs485: false,
+};
+const noCaps: Serial.Capabilities = {
+  lines: [],
+  flowControl: ['none'],
+  breakSignal: false,
+  rs485: false,
+};
 
 const mockNative = {
   addListener: jest.fn((name: string, l: Listener) => {
@@ -23,9 +40,14 @@ const mockNative = {
         { code: 'PERMISSION_DENIED' }
       );
     calls.push('openUart');
-    return nextHandle++;
+    return { handle: nextHandle++, capabilities: path.startsWith('/dev/pts/') ? noCaps : uartCaps };
   }),
-  openUsb: jest.fn(async () => nextHandle++),
+  openUsb: jest.fn(async () => ({ handle: nextHandle++, capabilities: uartCaps })),
+  createVirtual: jest.fn(async () => ({ handle: nextHandle++, path: '/dev/pts/4' })),
+  getLines: jest.fn(async () => ({ dtr: true, cts: false })),
+  setLines: jest.fn(async () => {}),
+  sendBreak: jest.fn(async () => {}),
+  watchLines: jest.fn(async () => {}),
   startReading: jest.fn(async () => {
     calls.push('startReading');
   }),
@@ -133,4 +155,100 @@ it('drops the native listeners when no port is open', async () => {
   expect(listeners.onData.size).toBe(1);
   await port.close();
   expect(listeners.onData.size).toBe(0);
+});
+
+it('refuses rs485 on USB', async () => {
+  await expect(Serial.open(usb, { baudRate: 9600, rs485: true })).rejects.toMatchObject({
+    code: 'INVALID_OPTIONS',
+  });
+});
+
+it('exposes the capabilities from open', async () => {
+  const port = await Serial.open('/dev/ttyS1', { baudRate: 9600 });
+  expect(port.capabilities).toEqual(uartCaps);
+  await port.close();
+});
+
+it('sends DTR and RTS as set and clear masks, skipping lines left out', async () => {
+  const port = await Serial.open('/dev/ttyS1', { baudRate: 9600 });
+  await port.setLines({ dtr: true, rts: false });
+  await port.setLines({ rts: true });
+  await port.setLines({});
+  expect(mockNative.setLines.mock.calls.map((c: any[]) => c.slice(1))).toEqual([
+    [1, 2],
+    [2, 0],
+  ]);
+  await expect(port.setLines({ dtr: 'yes' as any })).rejects.toMatchObject({
+    code: 'INVALID_OPTIONS',
+  });
+  await port.close();
+});
+
+it('checks the break length', async () => {
+  const port = await Serial.open('/dev/ttyS1', { baudRate: 9600 });
+  await port.sendBreak(250);
+  expect(mockNative.sendBreak).toHaveBeenCalledWith((port as any).handle, 250);
+  await expect(port.sendBreak(0)).rejects.toMatchObject({ code: 'INVALID_OPTIONS' });
+  await expect(port.sendBreak(1.5)).rejects.toMatchObject({ code: 'INVALID_OPTIONS' });
+  await port.close();
+});
+
+it('watches the lines only while someone listens', async () => {
+  const port = await Serial.open('/dev/ttyS1', { baudRate: 9600 });
+  const handle = (port as any).handle;
+  const seen: Serial.LineState[] = [];
+  const a = port.onLinesChange((l) => seen.push(l));
+  const b = port.onLinesChange(() => {});
+  expect(mockNative.watchLines.mock.calls).toEqual([[handle, true]]);
+
+  emit('onLines', { handle, lines: { cts: true } });
+  emit('onLines', { handle: 999, lines: { cts: false } });
+  expect(seen).toEqual([{ cts: true }]);
+
+  a.remove();
+  expect(mockNative.watchLines).toHaveBeenCalledTimes(1);
+  b.remove();
+  expect(mockNative.watchLines.mock.calls[1]).toEqual([handle, false]);
+  await port.close();
+});
+
+it('refuses line listeners on a port without lines', async () => {
+  const port = await Serial.open('/dev/pts/4', { baudRate: 9600 });
+  expect(() => port.onLinesChange(() => {})).toThrow(
+    expect.objectContaining({ code: 'NOT_SUPPORTED' })
+  );
+  await port.close();
+});
+
+describe('virtual ports', () => {
+  it('creates one, checks its framing and starts reading', async () => {
+    const device = await Serial.createVirtualPort({ framing: { type: 'idle', ms: 5 } });
+    expect(device.path).toBe('/dev/pts/4');
+    expect(mockNative.createVirtual).toHaveBeenCalledWith({ type: 'idle', bytes: [], size: 0, ms: 5 });
+    expect(mockNative.startReading).toHaveBeenCalledWith((device as any).handle);
+    await device.close();
+    await expect(
+      Serial.createVirtualPort({ framing: { type: 'idle', ms: 0 } })
+    ).rejects.toMatchObject({ code: 'INVALID_OPTIONS' });
+  });
+
+  it('keeps device and app data apart', async () => {
+    const device = await Serial.createVirtualPort();
+    const port = await Serial.open(device.path, { baudRate: 9600 });
+    const toDevice: number[][] = [];
+    const toApp: number[][] = [];
+    device.onData((d) => toDevice.push([...d]));
+    port.onData((d) => toApp.push([...d]));
+
+    emit('onData', { handle: (device as any).handle, data: new Uint8Array([1]) });
+    emit('onData', { handle: (port as any).handle, data: new Uint8Array([2]) });
+
+    expect(toDevice).toEqual([[1]]);
+    expect(toApp).toEqual([[2]]);
+    await device.write('ok');
+    expect(mockNative.write).toHaveBeenCalledWith((device as any).handle, expect.any(Uint8Array));
+    await port.close();
+    await device.close();
+    await expect(device.write('x')).rejects.toMatchObject({ code: 'NOT_OPEN' });
+  });
 });

@@ -206,7 +206,7 @@ type Capabilities = { lines: Line[]; flowControl: FlowControl[]; breakSignal: bo
 |---|---|---|---|
 | Lines | `TIOCMGET`/`TIOCMBIS`/`TIOCMBIC`; all six if `TIOCMGET` works, none otherwise | `getSupportedControlLines()` | none |
 | Break | `TIOCSBRK`, sleep, `TIOCCBRK` | `setBreak(true/false)` | no |
-| Flow control | `rts-cts` (`CRTSCTS`), `xon-xoff` (`IXON`/`IXOFF`) | `getSupportedFlowControl()`; `xon-xoff` uses `XON_XOFF`, else `XON_XOFF_INLINE` | none |
+| Flow control | `rts-cts` (`CRTSCTS`), `xon-xoff` (`IXON`/`IXOFF`) | `getSupportedFlowControl()`; `xon-xoff` only where the chip does it (`XON_XOFF`, e.g. CP21xx). Inline XON/XOFF (FTDI, PL2303) would need filtering in the read loop and is not offered. | none |
 | RS-485 | if `TIOCGRS485` works | no | no |
 
 ### New open options

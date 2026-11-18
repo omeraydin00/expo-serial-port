@@ -44,6 +44,47 @@ export type OpenOptions = {
   framing?: Framing;
   /** UART only. If the node is not readable and writable, run `chmod 666` on it through `su` first. Default false. */
   useSu?: boolean;
+  /** Default `'none'`. A mode the port does not support rejects `open()` with `NOT_SUPPORTED`. */
+  flowControl?: FlowControl;
+  /**
+   * UART only. Puts the driver in RS-485 mode, so it switches RTS (the transceiver's direction) around
+   * every write. `true` uses the defaults below. Rejects with `NOT_SUPPORTED` if the driver has no RS-485 mode.
+   */
+  rs485?: boolean | Rs485Options;
+};
+
+export type Rs485Options = {
+  /** RTS level while sending. Default true. */
+  rtsOnSend?: boolean;
+  /** RTS level after sending. Default false. */
+  rtsAfterSend?: boolean;
+  /** Default 0. */
+  delayBeforeSendMs?: number;
+  /** Default 0. */
+  delayAfterSendMs?: number;
+  /** Keep receiving while sending (and so read back your own writes). Default false. */
+  receiveDuringSend?: boolean;
+};
+
+export type Line = 'dtr' | 'rts' | 'cts' | 'dsr' | 'cd' | 'ri';
+
+/** `dtr-dsr` is USB only. */
+export type FlowControl = 'none' | 'rts-cts' | 'dtr-dsr' | 'xon-xoff';
+
+/** The state of the lines in `capabilities.lines`. */
+export type LineState = Partial<Record<Line, boolean>>;
+
+/** What a port can do beyond reading and writing. Calls outside it reject with `NOT_SUPPORTED`. */
+export type Capabilities = {
+  lines: Line[];
+  flowControl: FlowControl[];
+  breakSignal: boolean;
+  rs485: boolean;
+};
+
+export type VirtualPortOptions = {
+  /** How the device side splits what the app writes. Default `{ type: 'raw' }`. */
+  framing?: Framing;
 };
 
 export type SerialErrorCode =
@@ -57,6 +98,8 @@ export type SerialErrorCode =
   | 'OPEN_FAILED'
   | 'WRITE_FAILED'
   | 'DISCONNECTED'
+  | 'NOT_SUPPORTED'
+  | 'CONTROL_FAILED'
   | 'UNSUPPORTED_PLATFORM';
 
 export type Subscription = { remove(): void };
