@@ -138,6 +138,7 @@ export default function App() {
     run('hang up', async () => {
       await device?.close();
       setPorts((list) => list.filter((p) => p.kind !== 'uart' || p.path !== device?.path));
+      setSelected((s) => (s?.kind === 'uart' && s.path === device?.path ? null : s));
       setDevice(null);
       add('virtual device hung up');
     });

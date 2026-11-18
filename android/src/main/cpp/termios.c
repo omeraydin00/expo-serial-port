@@ -186,11 +186,14 @@ Java_expo_modules_serialport_Termios_nativeSetBreak(JNIEnv *env, jclass clazz, j
 }
 
 // Returns the driver's current RS-485 flags, or a negative errno if it has no RS-485 support.
+// Older kernels answer TIOCGRS485 on every port, so the current config is also written back
+// unchanged: drivers without an RS-485 mode refuse that with ENOTTY.
 JNIEXPORT jint JNICALL
 Java_expo_modules_serialport_Termios_nativeGetRs485(JNIEnv *env, jclass clazz, jint fd) {
   struct serial_rs485 conf;
   memset(&conf, 0, sizeof(conf));
   if (ioctl(fd, TIOCGRS485, &conf) != 0) return -errno;
+  if (ioctl(fd, TIOCSRS485, &conf) != 0) return -errno;
   return (jint) (conf.flags & 0x7fffffff);
 }
 
