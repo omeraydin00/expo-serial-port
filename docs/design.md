@@ -19,7 +19,9 @@ In:
 Out:
 
 - iOS: no serial ports. `list()` returns `[]`, `open()` rejects with `UNSUPPORTED_PLATFORM`.
-- Protocols on top (Modbus etc.), stream/pipe APIs, flow control beyond what the driver does by default
+- Stream/pipe APIs
+
+0.1 left out control lines, flow control and protocols on top. They are planned in [Roadmap](#roadmap).
 
 ## JS API
 
@@ -140,3 +142,107 @@ On hardware, before each release:
 - GitHub `omeraydin00/expo-serial-port`, MIT
 - npm `@omeraydin00/expo-serial-port` (the unscoped name was refused as too close to `expo-serialport`), starting at 0.1.0
 - README: install, a short example, API reference, permission troubleshooting, tested devices
+
+## Roadmap
+
+Each release is tested on hardware and published on its own. Later ones build on earlier ones.
+
+| Version | Adds | Why this order |
+|---|---|---|
+| 0.2.0 | Virtual ports, control lines, break, flow control, RS-485 mode | Native groundwork. The virtual port is what the later releases are tested with. |
+| 0.3.0 | `port.request()` (write, wait for one reply), a mock port for Jest | Modbus is a request/reply protocol |
+| 0.4.0 | Modbus RTU client | Needs `request()`, and RS-485 is the usual wire |
+| 0.5.0 | `useSerialPort()` hook, USB attach/detach events, reconnect, Expo config plugin (USB device filter) | Convenience on top |
+
+## 0.2.0: virtual ports, control lines, RS-485
+
+### Virtual ports
+
+A virtual port is a pseudo-terminal the app creates itself. The app side is a real `/dev/pts/N` node that `open()` treats like any UART, and the other side is a `VirtualPort` the app drives from JS. It lets an app (and this library's own tests) run against a simulated device on any Android phone, without hardware or root.
+
+```ts
+const device = await Serial.createVirtualPort({ framing: { type: 'idle', ms: 5 } });
+device.path;                                    // '/dev/pts/3'
+device.onData((bytes) => device.write(reply(bytes)));
+const port = await Serial.open(device.path, { baudRate: 9600 });
+
+interface VirtualPort {
+  readonly path: string;
+  readonly isOpen: boolean;
+  write(data: Uint8Array | string): Promise<void>; // arrives on the app's port
+  onData(listener: (bytes: Uint8Array) => void): Subscription; // what the app wrote, framed
+  close(): Promise<void>;                        // the app's port gets DISCONNECTED
+}
+```
+
+- Created with `posix_openpt`, `grantpt`, `unlockpt`, `ptsname_r`. The pts side is put in raw mode at once, so nothing is echoed even before the app opens it.
+- The `VirtualPort` keeps its own fd on the pts side open. Without it the master reads a hangup until the app opens the port.
+- It is a `Port` like the others, so reading, framing and events go through the same `ReadLoop` and `Framer`.
+- Closing it hangs up the pts side. The app's port reads `POLLHUP` and fails with `DISCONNECTED`, the same as an unplugged USB adapter.
+- Baud rate, parity etc. are accepted and have no effect. Virtual ports have no control lines, no break and no RS-485.
+
+### Control lines and break
+
+```ts
+interface SerialPort {
+  readonly capabilities: Capabilities;
+  setLines(lines: { dtr?: boolean; rts?: boolean }): Promise<void>;
+  getLines(): Promise<Partial<Record<Line, boolean>>>; // only the lines in capabilities.lines
+  onLinesChange(listener: (lines: Partial<Record<Line, boolean>>) => void): Subscription;
+  sendBreak(ms: number): Promise<void>;          // 1 to 10000
+}
+
+type Line = 'dtr' | 'rts' | 'cts' | 'dsr' | 'cd' | 'ri';
+type FlowControl = 'none' | 'rts-cts' | 'dtr-dsr' | 'xon-xoff';
+type Capabilities = { lines: Line[]; flowControl: FlowControl[]; breakSignal: boolean; rs485: boolean };
+```
+
+- Anything outside `capabilities` rejects with the new code `NOT_SUPPORTED`. Nothing is silently ignored.
+- `setLines({ rts })` rejects with `INVALID_OPTIONS` while RTS belongs to `rts-cts` flow control or RS-485.
+- `setLines` and `sendBreak` run on the port's writer thread, so a break comes after the writes before it.
+- `onLinesChange` polls every 20 ms on a native thread while it has listeners, and emits only changes. Neither USB nor most UART drivers have a reliable change notification (`TIOCMIWAIT` is missing on many), so polling is the portable choice.
+
+| | UART | USB | Virtual |
+|---|---|---|---|
+| Lines | `TIOCMGET`/`TIOCMBIS`/`TIOCMBIC`; all six if `TIOCMGET` works, none otherwise | `getSupportedControlLines()` | none |
+| Break | `TIOCSBRK`, sleep, `TIOCCBRK` | `setBreak(true/false)` | no |
+| Flow control | `rts-cts` (`CRTSCTS`), `xon-xoff` (`IXON`/`IXOFF`) | `getSupportedFlowControl()`; `xon-xoff` uses `XON_XOFF`, else `XON_XOFF_INLINE` | none |
+| RS-485 | if `TIOCGRS485` works | no | no |
+
+### New open options
+
+```ts
+type OpenOptions = {
+  // ...0.1 options
+  flowControl?: FlowControl;                     // 'none'
+  rs485?: boolean | {                            // UART only, off by default
+    rtsOnSend?: boolean;                         // true: RTS level while sending
+    rtsAfterSend?: boolean;                      // false: RTS level after sending
+    delayBeforeSendMs?: number;                  // 0
+    delayAfterSendMs?: number;                   // 0
+    receiveDuringSend?: boolean;                 // false
+  };
+};
+```
+
+- `rs485: true` means the defaults above. JS rejects `rs485` on a USB port with `INVALID_OPTIONS`; USB-RS485 adapters switch direction themselves.
+- On open, `TIOCSRS485` sets the mode, then `TIOCGRS485` reads it back. If the driver refuses or does not keep `SER_RS485_ENABLED`, the port is closed and `open()` rejects with `NOT_SUPPORTED`.
+- A `flowControl` the port does not support also rejects `open()` with `NOT_SUPPORTED`.
+
+### Native changes
+
+- `Port` gets `capabilities`, `setLines(dtr: Boolean?, rts: Boolean?)`, `getLines(): Int` (bit mask) and `setBreak(on: Boolean)`.
+- `termios.c`: flow control in `nativeOpen`; new `nativeGetLines`, `nativeSetLines`, `nativeSetBreak`, `nativeSetRs485`, `nativeCreatePty`.
+- New `VirtualPort.kt` and `LinePoller.kt`.
+- `openUart`/`openUsb` return `{ handle, capabilities }` instead of a bare handle.
+
+### Testing
+
+| What | Where | How |
+|---|---|---|
+| RS-485 flag encoding, line bit mapping | Kotlin unit tests | JVM |
+| New options, `capabilities` checks, virtual port routing | Jest | mocked native module |
+| Virtual port: 256 bytes both ways, all framings, close gives `DISCONNECTED` | Galaxy S25 FE (no root) and the RK3566 board | example app, Virtual screen |
+| Break | CP2102 with TX bridged to RX | a break arrives as a `0x00` byte |
+| DTR/RTS | CP2102, RK3566 ttyS9 | set, read back with `getLines()`; DTR pin with a multimeter if one is at hand |
+| RS-485 mode | RK3566 | mode accepted and read back. Not tested on a real RS-485 line (no transceiver at hand); the README says so. |
